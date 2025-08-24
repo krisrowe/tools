@@ -19,3 +19,4 @@ To add a new tool to this repository, run the `register-tool.sh` utility from th
 
 ## Registered Tools
 - **[cursor-linux-install](./cursor-linux-install/)**: Shell script for Linux-based install of Cursor IDE on workstation
+- **[py-split-lib](./py-split-lib/)**: Split a subfolder out of an existing Git repository into a new, standalone repository for reusable code.
