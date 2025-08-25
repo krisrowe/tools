@@ -311,14 +311,19 @@ else
 fi
 pause 'Press [Enter] for Step 7: Commit and Push Code...'
 
-# --- Step 7: Commit and push the initial code to GitHub ---
+# --- Step 7: Prepare for initial commit ---
 echo
-echo "▶️ Step 7: Committing and pushing the initial codebase..."
-git add .
-git commit -m "feat: Split library code from source repository"
-git branch -M main
-git push -u origin main
-echo "✅ Code pushed to GitHub."
+echo "▶️ Step 7: Code is ready for your initial commit!"
+echo "   All files have been staged and are ready for you to review and commit."
+echo
+echo "   To complete the setup, run these commands from the new repository:"
+echo "   cd ${CLONED_REPO_PATH}"
+echo "   git add ."
+echo "   git commit -m \"feat: Initial library setup\""
+echo "   git branch -M main"
+echo "   git push -u origin main"
+echo
+echo "   ℹ️  Take your time to review the changes and customize the commit message!"
 pause "Press [Enter] for Step 8: Create Production 'requirements.txt' in original app..."
 
 # --- Step 8: Create the Production requirements.txt in the original app ---
@@ -379,3 +384,11 @@ fi
 # --- All Done ---
 echo
 echo "🚀 Success! Your workspace is configured."
+echo
+echo "📝 Don't forget to commit and push your new repository:"
+echo "   cd ${CLONED_REPO_PATH}"
+echo "   git add ."
+echo "   git commit -m \"feat: Initial library setup\""
+echo "   git push -u origin main"
+echo
+echo "   Enjoy your new library! 🎉"
