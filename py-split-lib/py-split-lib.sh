@@ -13,21 +13,46 @@ set -e
 
 # --- Usage function to display help text ---
 usage() {
-    echo "Usage: $0 <repo_owner> <existing_repo_path> <subfolder_name> <new_repo_name> <parent_dir_for_new_repo>"
+    echo "Usage: $0 [-s|--silent] <repo_owner> <existing_repo_path> <subfolder_name> <new_repo_name> <parent_dir_for_new_repo>"
+    echo
+    echo "Options:"
+    echo "  -s, --silent               Silent mode: skip interactive prompts and optional steps"
+    echo "  -h, --help                 Show this help message"
     echo
     echo "Arguments:"
-    echo "  <repo_owner>                Your GitHub username or organization (e.g., krisrowe)."
+    echo "  <repo_owner>                Your GitHub username or organization (e.g., acmecoders)."
     echo "  <existing_repo_path>        The full local path to the existing repository."
     echo "  <subfolder_name>            The name of the subfolder to split out."
     echo "  <new_repo_name>             The name for the new library's repository."
     echo "  <parent_dir_for_new_repo>   The parent directory where 'git clone' will be run. The new repo will be created inside this directory."
     echo
     echo "-------------------------------------------------------------------------------------------"
-    echo "Example: To split 'multi_env_sdk' out of 'ai-food-log' into a new repo 'multieden', with the new repo being created inside '~/ws':"
+    echo "Example: To split 'my_package' out of 'my-app' into a new repo 'my-library', with the new repo being created inside '~/workspace':"
     echo
-    echo "$0 krisrowe '~/ws/ai-food-log' 'multi_env_sdk' 'multieden' '~/ws'"
+    echo "$0 acmecoders '~/workspace/my-app' 'my_package' 'my-library' '~/workspace'"
+    echo
+    echo "Silent mode example:"
+    echo "$0 -s acmecoders '~/workspace/my-app' 'my_package' 'my-library' '~/workspace'"
     echo "-------------------------------------------------------------------------------------------"
 }
+
+# --- Parse command line arguments ---
+SILENT_MODE=false
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -s|--silent)
+            SILENT_MODE=true
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
 
 # --- Check for correct number of arguments ---
 if [ "$#" -ne 5 ]; then
@@ -45,7 +70,9 @@ PARENT_DIR=$(eval echo "$5") # Expands '~' if present
 
 # --- Helper function for user prompts ---
 function pause(){
-   read -p "$*"
+   if [ "$SILENT_MODE" = false ]; then
+       read -p "$*"
+   fi
 }
 
 # --- Derived Configuration ---
@@ -58,6 +85,10 @@ PYTHON_MODULE_NAME=$(echo "$NEW_REPO_NAME" | sed -e 's/[-.]/_/g' | tr '[:upper:]
 # --- Pre-flight Checks ---
 # All validations are performed here before any actions are taken.
 # =============================================================================
+if [ "$SILENT_MODE" = true ]; then
+    echo "🔇 Silent mode enabled - skipping interactive prompts and optional steps"
+    echo
+fi
 echo "▶️ Performing pre-flight checks..."
 
 # 1. Validate the source repository path
@@ -173,23 +204,13 @@ pause 'Press [Enter] for Step 3: Copy and Structure Code...'
 # --- Step 3: Copy code and structure it for a modern Python package ---
 echo
 echo "▶️ Step 3: Copying and structuring the code..."
-# Copy all code from the source subfolder
-(cd "${EXISTING_REPO_PATH}" && git archive HEAD:"${SUBFOLDER_NAME}" | tar -x -C "${CLONED_REPO_PATH}")
-
-# Create the src directory
+# Create the src directory first
 echo "   - Creating 'src/${PYTHON_MODULE_NAME}' directory..."
 mkdir -p "src/${PYTHON_MODULE_NAME}"
 
-# Move all files except setup.py into the src directory
-echo "   - Moving library files into 'src/${PYTHON_MODULE_NAME}'..."
-shopt -s dotglob # Include hidden files
-for item in *;
-do
-    if [[ "$item" != "setup.py" && "$item" != "src" && "$item" != ".git" && "$item" != ".gitignore" ]]; then
-        mv "$item" "src/${PYTHON_MODULE_NAME}/"
-    fi
-done
-shopt -u dotglob
+# Extract the contents of the subfolder directly into the src directory
+echo "   - Extracting subfolder contents into 'src/${PYTHON_MODULE_NAME}'..."
+(cd "${EXISTING_REPO_PATH}" && git archive HEAD "${SUBFOLDER_NAME}" | tar -x -C "${CLONED_REPO_PATH}/src/${PYTHON_MODULE_NAME}" --strip-components=1)
 
 echo "✅ Code copied and structured successfully."
 pause "Press [Enter] for Step 4: Handle Requirements..."
@@ -270,17 +291,23 @@ echo "   Your new library's code is now in 'src/${PYTHON_MODULE_NAME}'."
 echo "   Internal imports may still refer to the old subfolder name ('${SUBFOLDER_NAME}')."
 echo
 
-read -p "Would you like to automatically update these imports now? (y/N) " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo "   - Running import update script..."
-    # Assuming the update script is in the same directory as this script
-    "$(dirname "$0")/py-update-imports.sh" "${SUBFOLDER_NAME}" "${PYTHON_MODULE_NAME}" "${CLONED_REPO_PATH}"
-    echo "   - ✅ Imports updated."
+if [ "$SILENT_MODE" = false ]; then
+    read -p "Would you like to automatically update these imports now? (y/N) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo "   - Running import update script..."
+        # Assuming the update script is in the same directory as this script
+        "$(dirname "$0")/py-update-imports.sh" "${CLONED_REPO_PATH}" "${SUBFOLDER_NAME}" "${PYTHON_MODULE_NAME}"
+        echo "   - ✅ Imports updated."
+    else
+        echo "   - Skipping import update."
+        echo "   - ℹ️  You can run this update manually later with the command:"
+        echo "         $(dirname "$0")/py-update-imports.sh ${CLONED_REPO_PATH} ${SUBFOLDER_NAME} ${PYTHON_MODULE_NAME}"
+    fi
 else
-    echo "   - Skipping import update."
+    echo "   - Silent mode: Skipping import update."
     echo "   - ℹ️  You can run this update manually later with the command:"
-    echo "         $(dirname "$0")/py-update-imports.sh ${SUBFOLDER_NAME} ${PYTHON_MODULE_NAME} ${CLONED_REPO_PATH}"
+            echo "         $(dirname "$0")/py-update-imports.sh ${CLONED_REPO_PATH} ${SUBFOLDER_NAME} ${PYTHON_MODULE_NAME}"
 fi
 pause 'Press [Enter] for Step 7: Commit and Push Code...'
 
@@ -330,15 +357,21 @@ cd "${EXISTING_REPO_PATH}"
 echo "   The subfolder '${SUBFOLDER_NAME}' has been migrated to its own repository."
 echo
 
-read -p "Would you like to remove '${SUBFOLDER_NAME}' from this repository now? (y/N) " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo "   - Removing the subfolder..."
-    git rm -r "${SUBFOLDER_NAME}"
-    echo "   - ✅ Subfolder removed and deletion staged for commit."
-    echo "   - ℹ️  Run 'git commit -m \"refactor: Remove migrated subfolder ${SUBFOLDER_NAME}\"' to finalize."
+if [ "$SILENT_MODE" = false ]; then
+    read -p "Would you like to remove '${SUBFOLDER_NAME}' from this repository now? (y/N) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo "   - Removing the subfolder..."
+        git rm -r "${SUBFOLDER_NAME}"
+        echo "   - ✅ Subfolder removed and deletion staged for commit."
+        echo "   - ℹ️  Run 'git commit -m \"refactor: Remove migrated subfolder ${SUBFOLDER_NAME}\"' to finalize."
+    else
+        echo "   - Skipping removal."
+        echo "   - ℹ️  You can remove it manually later by running this command from anywhere:"
+        echo "         cd ${EXISTING_REPO_PATH} && git rm -r ${SUBFOLDER_NAME}"
+    fi
 else
-    echo "   - Skipping removal."
+    echo "   - Silent mode: Skipping source deletion."
     echo "   - ℹ️  You can remove it manually later by running this command from anywhere:"
     echo "         cd ${EXISTING_REPO_PATH} && git rm -r ${SUBFOLDER_NAME}"
 fi
